@@ -141,3 +141,42 @@ print("b1 shape:", b_new[0].shape)   # Expected: (64,)
 print("W2 shape:", W_new[1].shape)   # Expected: (10, 64)
 print("b2 shape:", b_new[1].shape)   # Expected: (10,)
 
+def backprop_multi_hidden(x, y, weights_list, bias_list, learning_rate):
+    num_layers = len(weights_list)
+    activations = [x]
+    pre_activations = []
+
+    for i in range(num_layers):
+        z = activations[-1] @ weights_list[i].T + bias_list[i]
+        pre_activations.append(z)
+        a = sigmoid(z) if i < num_layers - 1 else softmax(z)
+        activations.append(a)
+
+    grads_W = [None] * num_layers
+    grads_b = [None] * num_layers
+    y_true = one_hot(y)
+    delta = (activations[-1] - y_true) / x.shape[0]
+
+    for i in reversed(range(num_layers)):
+        grads_W[i] = delta.T @ activations[i]
+        grads_b[i] = np.sum(delta, axis=0)
+        if i > 0:
+            da = delta @ weights_list[i]
+            delta = da * sigmoid_derivative(sigmoid(pre_activations[i - 1]))
+
+    for i in range(num_layers):
+        weights_list[i] -= learning_rate * grads_W[i]
+        bias_list[i] -= learning_rate * grads_b[i]
+
+    return weights_list, bias_list
+
+# Initialize 784 > 64 > 32 > 10
+W1 = np.random.randn(64, 784) * 0.01
+W2 = np.random.randn(32, 64) * 0.01
+W3 = np.random.randn(10, 32) * 0.01
+b1 = np.zeros(64)
+b2 = np.zeros(32)
+b3 = np.zeros(10)
+weights, biases = backprop_multi_hidden(x, y, [W1, W2, W3], [b1, b2, b3], learning_rate=0.1)
+print("All weight shapes:", [w.shape for w in weights])
+

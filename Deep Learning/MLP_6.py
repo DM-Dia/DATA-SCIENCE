@@ -141,3 +141,124 @@ print("b1 shape:", b_new[0].shape)   # Expected: (64,)
 print("W2 shape:", W_new[1].shape)   # Expected: (10, 64)
 print("b2 shape:", b_new[1].shape)   # Expected: (10,)
 
+def backprop_multi_hidden(x, y, weights_list, bias_list, learning_rate):
+    num_layers = len(weights_list)
+    activations = [x]
+    pre_activations = []
+
+    for i in range(num_layers):
+        z = activations[-1] @ weights_list[i].T + bias_list[i]
+        pre_activations.append(z)
+        a = sigmoid(z) if i < num_layers - 1 else softmax(z)
+        activations.append(a)
+
+    grads_W = [None] * num_layers
+    grads_b = [None] * num_layers
+    y_true = one_hot(y)
+    delta = (activations[-1] - y_true) / x.shape[0]
+
+    for i in reversed(range(num_layers)):
+        grads_W[i] = delta.T @ activations[i]
+        grads_b[i] = np.sum(delta, axis=0)
+        if i > 0:
+            da = delta @ weights_list[i]
+            delta = da * sigmoid_derivative(sigmoid(pre_activations[i - 1]))
+
+    for i in range(num_layers):
+        weights_list[i] -= learning_rate * grads_W[i]
+        bias_list[i] -= learning_rate * grads_b[i]
+
+    return weights_list, bias_list
+
+# Initialize 784 > 64 > 32 > 10
+W1 = np.random.randn(64, 784) * 0.01
+W2 = np.random.randn(32, 64) * 0.01
+W3 = np.random.randn(10, 32) * 0.01
+b1 = np.zeros(64)
+b2 = np.zeros(32)
+b3 = np.zeros(10)
+weights, biases = backprop_multi_hidden(x, y, [W1, W2, W3], [b1, b2, b3], learning_rate=0.1)
+print("All weight shapes:", [w.shape for w in weights])
+
+def backprop_with_activation(x, y, weights, biases, lr, activation_fn):
+    act, act_deriv = activation_fn
+    num_layers = len(weights)
+    a = [x]
+    z = []
+
+    for i in range(num_layers):
+        zi = a[-1] @ weights[i].T + biases[i]
+        z.append(zi)
+        ai = softmax(zi) if i == num_layers - 1 else act(zi)
+        a.append(ai)
+
+    grads_W, grads_B = [None] * num_layers, [None] * num_layers
+    delta = (a[-1] - one_hot(y)) / x.shape[0]
+
+    for i in reversed(range(num_layers)):
+        grads_W[i] = delta.T @ a[i]
+        grads_B[i] = np.sum(delta, axis=0)
+        if i > 0:
+            delta = (delta @ weights[i]) * act_deriv(z[i - 1])
+
+    for i in range(num_layers):
+        weights[i] -= lr * grads_W[i]
+        biases[i] -= lr * grads_B[i]
+
+    return weights, biases
+
+# Example with ReLU
+def relu(x): return np.maximum(0, x)
+def relu_deriv(x): return (x > 0).astype(float)
+activation = (relu, relu_deriv)
+
+weights, biases = backprop_with_activation(x, y, [W1, W2, W3], [b1, b2, b3], lr=0.1, activation_fn=activation)
+print("Updated weights with ReLU activation.")
+
+"""**6th question**"""
+
+def backprop_with_momentum(x, y, weights, biases, lr, activation_fn, momentum, epochs):
+    act, act_deriv = activation_fn
+    v_w = [np.zeros_like(w) for w in weights]
+    v_b = [np.zeros_like(b) for b in biases]
+
+    for _ in range(epochs):
+        a, z = [x], []
+        for i in range(len(weights)):
+            zi = a[-1] @ weights[i].T + biases[i]
+            z.append(zi)
+            ai = softmax(zi) if i == len(weights)-1 else act(zi)
+            a.append(ai)
+
+        delta = (a[-1] - one_hot(y)) / x.shape[0]
+        grads_W, grads_B = [None]*len(weights), [None]*len(biases)
+
+        for i in reversed(range(len(weights))):
+            grads_W[i] = delta.T @ a[i]
+            grads_B[i] = np.sum(delta, axis=0)
+            if i > 0:
+                delta = (delta @ weights[i]) * act_deriv(z[i - 1])
+
+        for i in range(len(weights)):
+            v_w[i] = momentum * v_w[i] + (1 - momentum) * grads_W[i]
+            v_b[i] = momentum * v_b[i] + (1 - momentum) * grads_B[i]
+            weights[i] -= lr * v_w[i]
+            biases[i] -= lr * v_b[i]
+
+    return weights, biases
+
+# Use with activation
+weights, biases = backprop_with_momentum(x, y, [W1, W2, W3], [b1, b2, b3], 0.1, activation, momentum=0.9, epochs=5)
+print("Weights updated with momentum.")
+
+def evaluate(x, y, weights, biases, activation_fn):
+    act, _ = activation_fn
+    a = x
+    for i in range(len(weights)):
+        z = a @ weights[i].T + biases[i]
+        a = softmax(z) if i == len(weights) - 1 else act(z)
+    predictions = np.argmax(a, axis=1)
+    accuracy = np.mean(predictions == y)
+    print(f"Accuracy: {accuracy:.4f}")
+
+evaluate(x, y, weights, biases, activation_fn=(relu, relu_deriv))
